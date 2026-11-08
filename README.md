@@ -73,9 +73,10 @@ Software (setup tells you the exact install command if one is missing):
    - Accept the terms of **[ai4bharat/indic-parler-tts](https://huggingface.co/ai4bharat/indic-parler-tts)** (Assamese voice)
    - For `--speakers auto`, also accept **[pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)**
    - Create a **Read** token: [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-4. Before your **first** dub, put the token in the PowerShell window (it is only needed to download the models once):
+4. Before your **first** dub, give the token to PowerShell (it is only needed to download the models once).
+   This line keeps it hidden - only `*****` appears on screen:
    ```
-   $env:HF_TOKEN = "hf_your_token_here"
+   $env:HF_TOKEN = [System.Net.NetworkCredential]::new('', (Read-Host 'Paste your Hugging Face token' -AsSecureString)).Password
    ```
 
 ---
@@ -210,9 +211,9 @@ NVIDIA GPU নাথাকিলেও CPU-ত চলে, কিন্তু ব
    - [indic-parler-tts](https://huggingface.co/ai4bharat/indic-parler-tts)-ৰ terms accept কৰক
    - `--speakers auto` ব্যৱহাৰ কৰিলে [pyannote](https://huggingface.co/pyannote/speaker-diarization-community-1)-ৰ terms-ও accept কৰক
    - [Settings → Tokens](https://huggingface.co/settings/tokens)-ত এটা **Read** token বনাওক
-4. প্ৰথমবাৰ dub কৰাৰ আগতে PowerShell-ত token-টো দিয়ক:
+4. প্ৰথমবাৰ dub কৰাৰ আগতে PowerShell-ত এই line-টো দিয়ক আৰু token-টো paste কৰক (screen-ত কেৱল `*****` দেখা যাব):
    ```
-   $env:HF_TOKEN = "hf_আপোনাৰ_token"
+   $env:HF_TOKEN = [System.Net.NetworkCredential]::new('', (Read-Host 'Paste your Hugging Face token' -AsSecureString)).Password
    ```
 
 ### ব্যৱহাৰ
