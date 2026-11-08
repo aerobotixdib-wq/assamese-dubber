@@ -15,6 +15,33 @@ VOICE = ("{name} speaks in Assamese with a clear, natural voice, at a {pace} pac
          "in a calm educational narration style. The recording has very clear audio "
          "with no background noise.")
 PACES = ["moderate", "slightly fast", "fast"]
+MAX_CPS = 21          # characters per second above which a take is treated as cut short
+MAX_PIECE = 90        # longest text (characters) given to Parler in one go
+
+
+def split_for_tts(text, limit=MAX_PIECE):
+    """Split at sentence ends, then at commas, into pieces of <= limit chars."""
+    import re
+    sents = [x for x in re.split(r"(?<=[।?!.])\s+", text.strip()) if x]
+    pieces = []
+    for s in sents:
+        if len(s) <= limit:
+            pieces.append(s); continue
+        cur = ""
+        for part in re.split(r"(?<=,)\s+", s):
+            if cur and len(cur) + 1 + len(part) > limit:
+                pieces.append(cur); cur = part
+            else:
+                cur = f"{cur} {part}".strip()
+        if cur:
+            pieces.append(cur)
+    merged = []                                   # no tiny leftover pieces
+    for x in pieces:
+        if merged and len(x) < 15 and len(merged[-1]) + len(x) < limit + 20:
+            merged[-1] += " " + x
+        else:
+            merged.append(x)
+    return merged or [text]
 
 
 class AssameseTTS:
@@ -42,16 +69,44 @@ class AssameseTTS:
         self.model = m.to(device).eval()
         self.sr = self.model.config.sampling_rate
 
-    def speak(self, text, pace="moderate", name="Amit"):
+    def _generate(self, text, pace, name, seed):
         torch = self.torch
         d = self.dtok(self.voice.format(pace=pace, name=name), return_tensors="pt").to(self.device)
         p = self.tok(text, return_tensors="pt").to(self.device)
-        torch.manual_seed(self.seed)
+        torch.manual_seed(seed)
         with torch.inference_mode():
             audio = self.model.generate(input_ids=d.input_ids, attention_mask=d.attention_mask,
                                         prompt_input_ids=p.input_ids,
                                         prompt_attention_mask=p.attention_mask)
         return audio.float().cpu().numpy().squeeze()
+
+    def _checked(self, text, pace, name):
+        """Parler-TTS sometimes stops early and skips words. Assamese speech is
+        about 12-17 characters per second; much faster than MAX_CPS means words
+        were dropped, so try again with another seed (keep the longest take)."""
+        best = None
+        for k in range(3):
+            audio = self._generate(text, pace, name, self.seed + k)
+            sec = max(len(audio) / self.sr, 0.01)
+            if best is None or len(audio) > len(best):
+                best = audio
+            if len(text.strip()) / sec <= MAX_CPS:
+                return audio
+            print(f"[tts] take {k+1} too short ({sec:.2f}s for {len(text)} chars) - retrying", flush=True)
+        return best
+
+    def speak(self, text, pace="moderate", name="Amit"):
+        """Long lines are spoken in short pieces (Parler is more reliable on
+        short text) and joined with a tiny natural pause."""
+        import numpy as np
+        pieces = split_for_tts(text)
+        gap = np.zeros(int(0.12 * self.sr), dtype=np.float32)
+        out = []
+        for i, piece in enumerate(pieces):
+            if i:
+                out.append(gap)
+            out.append(np.asarray(self._checked(piece, pace, name), dtype=np.float32))
+        return np.concatenate(out) if out else np.zeros(1, dtype=np.float32)
 
 
 def voice_units(units_path, out_dir, device="auto", retry_ratio=1.2, units=None, sync="natural"):

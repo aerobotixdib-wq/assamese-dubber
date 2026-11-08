@@ -13,6 +13,12 @@ import json
 from pathlib import Path
 
 
+PROMPTS = {
+    "en": "Hello, everyone. Welcome to today's video. Let's begin.",
+    "hi": "नमस्ते दोस्तों। आज के वीडियो में आपका स्वागत है। चलिए शुरू करते हैं।",
+}
+
+
 def pick_device(requested: str = "auto"):
     """Return (device, compute_type) for Faster-Whisper."""
     if requested in ("cpu", "cuda"):
@@ -45,9 +51,21 @@ def transcribe(audio_path, out_path, model_name="small", language=None,
     if sr != 16000:
         raise RuntimeError("transcribe() expects a 16 kHz WAV (dub.py makes one)")
 
+    # A short, well-punctuated prompt makes Whisper write punctuation.
+    # Without it, fast or casual speech (YouTube Shorts) often comes back as one
+    # long unpunctuated run - and then no complete sentences can be found.
+    lang = language
+    if lang is None:
+        try:
+            lang = model.detect_language(audio)[0]
+        except Exception:
+            lang = None
+    prompt = PROMPTS.get(lang) if task == "transcribe" else PROMPTS["en"]
+
     segments, info = model.transcribe(
         audio,
         language=language,               # None = auto-detect
+        initial_prompt=prompt,
         task=task,                       # "translate" = any language -> English
         beam_size=beam_size,
         word_timestamps=True,

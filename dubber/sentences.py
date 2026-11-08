@@ -94,7 +94,7 @@ def _split_long(g, max_sec, split_pause):
             + _split_long(g[cut + 1:], max_sec, split_pause))
 
 
-def _merge_short(groups, min_sec, min_words, max_sec, max_gap=0.6):
+def _merge_short(groups, min_sec, min_words, max_sec, max_gap=0.6, turns=None):
     def short(g):
         return (g[-1]["end"] - g[0]["start"] < min_sec) or len(g) < min_words
 
@@ -114,6 +114,11 @@ def _merge_short(groups, min_sec, min_words, max_sec, max_gap=0.6):
             cands = [c for c in cands if c[0] <= max_gap]
             if not cands:
                 continue
+            if turns:                                   # never merge two different voices
+                cands = [c for c in cands
+                         if _group_speaker(groups[c[1]], turns) == _group_speaker(g, turns)]
+                if not cands:
+                    continue
             _, j = min(cands)
             a, b = sorted((i, j))
             merged = groups[a] + groups[b]
@@ -146,8 +151,41 @@ def _clean_words(words, fixes):
     return out
 
 
+def _word_speaker(w, turns):
+    best, who = 0.0, None
+    for t in turns or []:
+        ov = min(w["end"], t["end"]) - max(w["start"], t["start"])
+        if ov > best:
+            best, who = ov, t["speaker"]
+    return who
+
+
+def _group_speaker(g, turns):
+    talk = {}
+    for w in g:
+        s = _word_speaker(w, turns)
+        talk[s] = talk.get(s, 0) + w["end"] - w["start"]
+    return max(talk, key=talk.get) if talk else None
+
+
+def _split_speakers(g, turns):
+    """Cut a word group wherever the speaker changes (so one unit = one voice)."""
+    if not turns:
+        return [g]
+    out, cur, cur_spk = [], [], None
+    for w in g:
+        s = _word_speaker(w, turns) or cur_spk
+        if cur and s != cur_spk:
+            out.append(cur); cur = []
+        cur.append(w); cur_spk = s
+    if cur:
+        out.append(cur)
+    return out
+
+
 def build_units(transcript_path, out_path, max_unit_sec=12.0, split_pause_sec=1.2,
-                min_unit_sec=1.2, min_words=3, tail_room_sec=2.0, word_fixes=None):
+                min_unit_sec=1.2, min_words=3, tail_room_sec=2.0, word_fixes=None,
+                turns=None, unpunctuated_max_sec=6.0):
     data = json.loads(Path(transcript_path).read_text(encoding="utf-8"))
     words, lang = data["words"], data.get("language", "en")
     if not words:
@@ -155,9 +193,13 @@ def build_units(transcript_path, out_path, max_unit_sec=12.0, split_pause_sec=1.
     words = _clean_words(words, word_fixes or {})
 
     groups = []
-    for g in _sentence_groups(words, lang):
-        groups += _split_long(g, max_unit_sec, split_pause_sec)
-    groups = _merge_short(groups, min_unit_sec, min_words, max_unit_sec)
+    for sent in _sentence_groups(words, lang):
+        for g in _split_speakers(sent, turns):
+            # no sentence-end punctuation = Whisper gave a run-on: use shorter units
+            text = _join(g)
+            limit = max_unit_sec if text.rstrip()[-1:] in ".?!।" else unpunctuated_max_sec
+            groups += _split_long(g, limit, split_pause_sec)
+    groups = _merge_short(groups, min_unit_sec, min_words, max_unit_sec, turns=turns)
 
     units = []
     audio_end = data.get("duration") or words[-1]["end"]

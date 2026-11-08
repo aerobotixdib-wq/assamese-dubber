@@ -173,13 +173,30 @@ def main():
     print("Source language:", src_lang)
 
     # 4. sentences -------------------------------------------------------------
+    # speakers first, so a sentence is never shared by two voices
+    turns_path = P / "speaker_turns.json"
+    clean = v16 if v16.exists() else a16
+    turns = None
+    if a.speakers == "auto":
+        step("3b   Who speaks when (pyannote)")
+        if not turns_path.exists():
+            cmd = [sys.executable, "-m", "dubber.speakers", clean, turns_path]
+            if a.num_speakers:
+                cmd += ["--num-speakers", a.num_speakers]
+            if run(cmd, cwd=ROOT).returncode != 0:
+                print("Speaker detection failed - using one voice for everyone.\n"
+                      "  Accept the terms at https://huggingface.co/pyannote/speaker-diarization-community-1\n"
+                      "  and set HF_TOKEN, then run again.", flush=True)
+        if turns_path.exists():
+            turns = json.loads(turns_path.read_text(encoding="utf-8"))
+
     step("4/8  Complete sentences (pySBD)")
     from dubber.sentences import build_units
     units_path = P / "units.json"
     fixes_file = ROOT / "word_fixes.json"            # optional {"Cubits": "Qubits"}
     fixes = json.loads(fixes_file.read_text(encoding="utf-8")) if fixes_file.exists() else {}
     if not units_path.exists():
-        build_units(tr, units_path, word_fixes=fixes)
+        build_units(tr, units_path, word_fixes=fixes, turns=turns)
     units = json.loads(units_path.read_text(encoding="utf-8"))
     for u in units:
         print(f"  {u['id']:>3}  {u['start']:7.2f}s  {u['text']}")
@@ -187,18 +204,8 @@ def main():
     # 4b. speakers -------------------------------------------------------------
     voice_of, spk_summary = {}, {}
     if a.speakers == "auto":
-        step("4b   Who speaks each sentence (pyannote)")
+        step("4b   Voice for each speaker")
         from dubber.speakers import assign
-        turns_path = P / "speaker_turns.json"
-        clean = v16 if v16.exists() else a16
-        if not turns_path.exists():
-            cmd = [sys.executable, "-m", "dubber.speakers", clean, turns_path]
-            if a.num_speakers:
-                cmd += ["--num-speakers", a.num_speakers]
-            if run(cmd, cwd=ROOT).returncode != 0:
-                print("Speaker detection failed - using one voice for everyone.\n"
-                      "  Needs: pip install pyannote.audio==4.0.7 \"numpy<2\"  and accepted terms at\n"
-                      "  https://huggingface.co/pyannote/speaker-diarization-community-1", flush=True)
         if turns_path.exists():
             overrides = dict(kv.split("=", 1) for kv in a.speaker_voices.split(",") if "=" in kv)
             overrides = {k.strip(): v.strip().capitalize() if v.strip().lower() not in ("male", "female")
