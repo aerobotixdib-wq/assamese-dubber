@@ -144,8 +144,11 @@ def main():
         if not video.exists():
             raise SystemExit(f"File not found: {video}")
     elif not video.exists():
-        run([sys.executable, "-m", "yt_dlp", "-f", "bv*+ba/b", "--merge-output-format", "mp4",
-             "-o", str(video), a.url], check=True)
+        # Prefer H.264 + AAC: plays on every phone. (YouTube often serves VP9/AV1,
+        # which iPhones and many players cannot play inside an MP4.)
+        run([sys.executable, "-m", "yt_dlp",
+             "-f", "bv*[vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]/bv*+ba/b",
+             "--merge-output-format", "mp4", "-o", str(video), a.url], check=True)
     print("Using", video)
 
     # 2. audio -----------------------------------------------------------------
@@ -328,7 +331,16 @@ def main():
                 f"[1:a]aformat=channel_layouts=stereo,loudnorm=I={voice_lufs:.1f}:TP=-1.5:LRA=11,"
                 "aresample=44100[a]",
                 "-map", "0:v:0", "-map", "[a]", "-map", "2:0", "-map", "3:0"]
-    cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text",
+    vcodec = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                             "stream=codec_name", "-of", "csv=p=0", str(video)],
+                            capture_output=True, text=True).stdout.strip()
+    if vcodec == "h264":
+        vargs = ["-c:v", "copy"]
+    else:                      # VP9 / AV1 / HEVC -> H.264 so it plays on phones
+        print(f"  converting video from {vcodec or 'unknown'} to H.264 (plays on all phones)", flush=True)
+        vargs = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
+    cmd += vargs + ["-movflags", "+faststart",
+            "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text",
             "-metadata:s:a:0", "language=asm",
             "-metadata:s:s:0", "language=asm", "-metadata:s:s:0", "title=Assamese",
             "-metadata:s:s:1", f"language={iso3}", "-metadata:s:s:1", f"title={src_lang}",
