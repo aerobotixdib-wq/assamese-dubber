@@ -1,0 +1,19 @@
+# Assamese Dubber - Python packages (tested together on Windows 11, Python 3.11, RTX GPU)
+# PyTorch is NOT listed here: setup.ps1 installs torch==2.11.0 + torchaudio==2.11.0
+# from the right PyTorch index (CUDA 12.8 for NVIDIA GPUs, or CPU).
+
+numpy>=2,<2.6
+faster-whisper==1.2.1          # speech-to-text (Whisper)
+pysbd==0.3.4                   # complete sentences
+transformers==4.46.1           # needed by Indic Parler-TTS
+tokenizers==0.20.3
+huggingface_hub==0.36.2
+accelerate==1.15.0
+sentencepiece==0.2.2
+soundfile==0.14.0
+demucs==4.1.0                  # music / voice separation
+pyannote.audio==4.0.7          # speaker detection (--speakers auto)
+yt-dlp                         # YouTube download - kept unpinned, YouTube changes often
+
+# Assamese voice: AI4Bharat Indic Parler-TTS (pinned to the tested commit)
+parler-tts @ git+https://github.com/huggingface/parler-tts.git@d108732cd57788ec86bc857d99a6cabd66663d68

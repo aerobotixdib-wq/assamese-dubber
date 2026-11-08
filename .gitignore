@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Your dubbing projects (videos, audio, voices) - never upload these
+projects/
+
+# Secrets
+.env
+*.token
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
