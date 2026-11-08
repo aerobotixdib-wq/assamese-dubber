@@ -99,7 +99,8 @@ class AssameseTTS:
         """Long lines are spoken in short pieces (Parler is more reliable on
         short text) and joined with a tiny natural pause."""
         import numpy as np
-        pieces = split_for_tts(text)
+        from .numbers_as import numbers_to_words
+        pieces = split_for_tts(numbers_to_words(text))     # "২০০,০০০" -> "দুই লাখ"
         gap = np.zeros(int(0.12 * self.sr), dtype=np.float32)
         out = []
         for i, piece in enumerate(pieces):
@@ -112,6 +113,7 @@ class AssameseTTS:
 def voice_units(units_path, out_dir, device="auto", retry_ratio=1.2, units=None, sync="natural"):
     import soundfile as sf
     from .fit import prepare_clip
+    from .numbers_as import numbers_to_words
 
     if units is None:
         units = json.loads(Path(units_path).read_text(encoding="utf-8"))
@@ -121,11 +123,11 @@ def voice_units(units_path, out_dir, device="auto", retry_ratio=1.2, units=None,
     if man_path.exists():
         for m in json.loads(man_path.read_text(encoding="utf-8")):
             if (out_dir / m["file"]).exists():
-                manifest[(m["id"], m["assamese"], m.get("voice", "Amit"))] = m
+                manifest[(m["id"], m.get("spoken", m["assamese"]), m.get("voice", "Amit"))] = m
 
     tts = None
     for u in units:
-        key = (u["id"], u["assamese"], u.get("voice", "Amit"))
+        key = (u["id"], numbers_to_words(u["assamese"]), u.get("voice", "Amit"))
         if key in manifest:
             continue
         if tts is None:
@@ -152,7 +154,8 @@ def voice_units(units_path, out_dir, device="auto", retry_ratio=1.2, units=None,
             extra = out_dir / t["file"]
             if extra.exists():
                 extra.unlink()
-        manifest[key] = {"id": u["id"], "assamese": u["assamese"], "voice": u.get("voice", "Amit"),
+        manifest[key] = {"id": u["id"], "assamese": u["assamese"], "spoken": key[1],
+                         "voice": u.get("voice", "Amit"),
                          "file": final.name,
                          "pace": best["pace"], "sec": best["sec"], "slot": round(slot, 2),
                          "tries": tried}
@@ -161,5 +164,5 @@ def voice_units(units_path, out_dir, device="auto", retry_ratio=1.2, units=None,
                        encoding="utf-8")
         os.replace(tmp, man_path)
     def k(u):
-        return (u["id"], u["assamese"], u.get("voice", "Amit"))
+        return (u["id"], numbers_to_words(u["assamese"]), u.get("voice", "Amit"))
     return {u["id"]: str(out_dir / manifest[k(u)]["file"]) for u in units if k(u) in manifest}

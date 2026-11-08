@@ -25,7 +25,9 @@ def _save_manifest(voice_dir, u, sec):
     rows = json.loads(man.read_text(encoding="utf-8"))
     for m in rows:
         if m["id"] == u["id"] and m.get("voice", "Amit") == u.get("voice", "Amit"):
+            from .numbers_as import numbers_to_words
             m["assamese"], m["sec"], m["pace"] = u["assamese"], round(sec, 2), "slightly fast"
+            m["spoken"] = numbers_to_words(u["assamese"])
     man.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
