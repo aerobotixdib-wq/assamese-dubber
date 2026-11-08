@@ -1,4 +1,5 @@
-# Assamese Dubber - Python packages (tested together on Windows 11, Python 3.11, RTX GPU)
+# Assamese Dubber - the MAIN Python packages, for reading.
+# setup.ps1 actually installs requirements-lock.txt (every package at its exact tested version).
 # PyTorch is NOT listed here: setup.ps1 installs torch==2.11.0 + torchaudio==2.11.0
 # from the right PyTorch index (CUDA 12.8 for NVIDIA GPUs, or CPU).
 

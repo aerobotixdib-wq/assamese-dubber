@@ -50,9 +50,11 @@ if (-not $gitOk) {
     Warn "Git is needed to install Parler-TTS. Install it:  winget install Git.Git   then run this script again."
     exit 1
 }
-& $vpy -m pip install -r requirements.txt
+# Exact, tested versions - installed without dependency solving (pip cannot solve
+# this mix of libraries on its own; it fails with "resolution-too-deep").
+& $vpy -m pip install --no-deps -r requirements-lock.txt
 if ($LASTEXITCODE -ne 0) { Warn "Package install failed - see the error above."; exit 1 }
-Ok "packages installed (a 'protobuf' conflict warning from descript-audiotools is expected and harmless)"
+Ok "packages installed"
 
 # 5. FFmpeg -----------------------------------------------------------------
 Say "5/6  FFmpeg"
