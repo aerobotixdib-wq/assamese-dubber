@@ -239,8 +239,8 @@ def main():
             spk_summary = assign(tmp_units, turns, clean, default_voice, overrides)
             voice_of = {u["id"]: (u["speaker"], u["voice"]) for u in tmp_units}
             for spk, info in spk_summary.items():
-                print(f"  {spk}: {info['talk_sec']}s talking, pitch {info['pitch_hz']} Hz "
-                      f"-> {info['gender']} -> voice {info['voice']}")
+                print(f"  {spk}: {info['talk_sec']}s talking -> {info['gender']} "
+                      f"({info.get('by', 'pitch')}) -> voice {info['voice']}")
             (P / "speakers.json").write_text(json.dumps(spk_summary, indent=2), encoding="utf-8")
 
     # 5. translation -----------------------------------------------------------

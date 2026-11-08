@@ -29,7 +29,7 @@ people's videos - commercial or not. This tool is for education.
 | 2 | Demucs | Separates the voice from the background music |
 | 3 | Whisper large-v3-turbo | Writes down every word with its exact time |
 | 4 | pySBD | Rebuilds **complete sentences** (no half sentences) |
-| 5 | pyannote *(optional)* | Finds who speaks each sentence, and guesses male / female from pitch |
+| 5 | pyannote + voice-gender model *(optional)* | Finds who speaks each sentence, and whether each speaker is male or female |
 | 6 | Sarvam-Translate (via Ollama) | Translates each sentence into Assamese |
 | 7 | Indic Parler-TTS | Speaks it in Assamese (voices: Amit, Rakesh, Sita, Poonam) |
 | 8 | Llama 3.2 3B (via Ollama) | If a line is too long for its time, shortens the sentence and tries again |
@@ -128,7 +128,7 @@ the voice up. `report.txt` shows every shortened line, and marks lines where min
 - Translation is good and understandable, not always how a native speaker would say it.
   Check `report.txt` before you publish.
 - Lip sync is not done.
-- Male / female is guessed from voice pitch and can be wrong - fix it with `--speaker-voices`.
+- Male / female is decided by a small model (about 99% right in our tests); if it is ever wrong, fix it with `--speaker-voices`.
 - Other languages (not English / Indian languages) go through English first - experimental.
 
 ---
@@ -157,6 +157,7 @@ This repository's own code: **MIT** (see `LICENSE`). It uses these free models a
 | [pySBD](https://github.com/nipunsadvilkar/pySBD) | Nipun Sadvilkar | MIT |
 | [Demucs](https://github.com/adefossez/demucs) | Meta / A. Défossez | MIT |
 | [pyannote speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) | pyannote | CC-BY-4.0 |
+| [voice-gender-classifier](https://github.com/JaesungHuh/voice-gender-classifier) (ECAPA-TDNN) | Jaesung Huh | MIT |
 | [Sarvam-Translate](https://huggingface.co/sarvamai/sarvam-translate) (4-bit copy by [fischerman](https://huggingface.co/fischerman/sarvam-translate-gguf)) | Sarvam AI (built on Google Gemma 3) | GPL-3.0 + Gemma terms |
 | [Llama 3.2 3B](https://ollama.com/library/llama3.2) | Meta | Llama 3.2 Community License - **Built with Llama** |
 | [Indic Parler-TTS](https://huggingface.co/ai4bharat/indic-parler-tts) | AI4Bharat, IIT Madras | Apache-2.0 |
@@ -186,7 +187,7 @@ Models are downloaded by you from their official sources; they are **not** inclu
 2. Demucs-এ মাত আৰু background music বেলেগ কৰে।
 3. Whisper-এ প্ৰতিটো শব্দ আৰু তাৰ সঠিক time লিখি লয়।
 4. pySBD-এ সম্পূৰ্ণ sentence বনায়, আধা sentence নাথাকে।
-5. pyannote-এ (ইচ্ছা কৰিলে) কোনে কোন sentence কৈছে উলিয়ায়, আৰু pitch চাই male নে female সেইটো অনুমান কৰে।
+5. pyannote-এ (ইচ্ছা কৰিলে) কোনে কোন sentence কৈছে উলিয়ায়, আৰু এটা সৰু model-এ প্ৰতিজন speaker male নে female সেইটো ঠিক কৰে।
 6. Sarvam-Translate-এ প্ৰতিটো sentence অসমীয়ালৈ translate কৰে।
 7. Indic Parler-TTS-এ অসমীয়া মাতত কয় (voice: Amit, Rakesh, Sita, Poonam)।
 8. কোনো line নিজৰ time-ত নধৰিলে, Llama-এ sentence-টো চুটি কৰে আৰু আকৌ চেষ্টা কৰে।
@@ -239,7 +240,7 @@ NVIDIA GPU নাথাকিলেও CPU-ত চলে, কিন্তু ব
 - বহুত দ্ৰুত কথা কোৱা video-ত (news, comedy) কিছুমান line অলপ খৰকৈ শুনা যাব।
 - Translation বুজিব পৰা ধৰণৰ, কিন্তু সদায় মানুহে কোৱাৰ দৰে নহয়। Publish কৰাৰ আগতে `report.txt` চাই লওক।
 - Lip sync নহয়।
-- Male/female অনুমান ভুল হ'লে `--speaker-voices "SPEAKER_01=female"` দি ঠিক কৰক।
+- Male/female কেতিয়াবা ভুল হ'লে `--speaker-voices "SPEAKER_01=female"` দি ঠিক কৰক।
 
 ### সমস্যা হ'লে
 

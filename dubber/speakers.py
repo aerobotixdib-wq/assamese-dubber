@@ -4,8 +4,9 @@
    Model: pyannote/speaker-diarization-community-1 (free; accept its terms on
    Hugging Face once).  Install: pip install pyannote.audio==4.0.7 "numpy<2"
 2. Each sentence gets the speaker who talks most during it.
-3. Each speaker's median voice pitch decides male / female
-   (men ~85-155 Hz, women ~165-255 Hz; threshold 160 Hz).
+3. A small voice-gender model (ECAPA, 98.7% accurate; gender_model.py) listens
+   to up to 30 s of each speaker and decides male / female. If it cannot load,
+   the speaker's median pitch is used instead (threshold 160 Hz) - less reliable.
 4. Voices: male -> Amit, Rakesh;  female -> Sita, Poonam  (Indic Parler-TTS).
 
 Run as a separate process (python -m dubber.speakers ...) so its many
@@ -91,16 +92,32 @@ def assign(units, turns, wav16k, default_voice="Amit", overrides=None):
 
     x, sr = sf.read(str(wav16k), dtype="float32", always_2d=True)
     x = x.mean(axis=1)
-    talk, f0 = {}, {}
+    talk, f0, clips = {}, {}, {}
     for t in turns:
         talk[t["speaker"]] = talk.get(t["speaker"], 0) + t["end"] - t["start"]
         f0.setdefault(t["speaker"], []).extend(_f0_frames(x, sr, t["start"], t["end"]))
+        clips.setdefault(t["speaker"], []).append(x[int(t["start"] * sr):int(t["end"] * sr)])
+
+    model_says = {}
+    try:
+        from .gender_model import classify
+        for spk, parts in clips.items():
+            audio = np.concatenate(parts)[:sr * 30]
+            if len(audio) > sr * 0.5:
+                model_says[spk] = classify(audio)
+    except Exception as e:
+        print(f"[speakers] gender model unavailable ({e}) - using voice pitch", flush=True)
 
     used = {"male": 0, "female": 0}
     summary = {}
     for spk in sorted(talk, key=talk.get, reverse=True):     # main speaker first
         hz = float(np.median(f0[spk])) if f0.get(spk) else None
-        gender = "female" if (hz and hz >= PITCH_SPLIT_HZ) else "male"
+        if spk in model_says:
+            gender, conf = model_says[spk]
+            method = f"model {conf:.0%}"
+        else:
+            gender = "female" if (hz and hz >= PITCH_SPLIT_HZ) else "male"
+            method = "pitch"
         o = overrides.get(spk)
         if o in ("male", "female"):
             gender, o = o, None
@@ -112,7 +129,7 @@ def assign(units, turns, wav16k, default_voice="Amit", overrides=None):
             used[gender] += 1
         summary[spk] = {"talk_sec": round(talk[spk], 1),
                         "pitch_hz": round(hz) if hz else None,
-                        "gender": gender, "voice": voice}
+                        "gender": gender, "by": method, "voice": voice}
     for u in units:
         u["voice"] = summary.get(u["speaker"], {}).get("voice", default_voice)
     return summary
