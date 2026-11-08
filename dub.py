@@ -10,8 +10,8 @@ Options:
   --from en|hi|auto   source language (default: auto-detect)
   --name NAME         project folder name (default: from the video)
   --no-music          do not keep the original background music
-  --music-volume auto background music level. auto (default) = same balance of voice and
-                      music as the original video; or a number (0.2 quieter, 0.6 louder)
+  --music-volume 1.0  original music level (default 1.0 = exactly as in the original video,
+                      with the voice as loud as the original speaker); 0.5 = half, 1.5 = louder
   --whisper MODEL     Whisper model (default large-v3-turbo; "small" is faster)
   --max-speed 1.2     how much a line may be sped up before it is re-written
   --voice male        one voice for everyone: male (Amit) | female (Sita) | Amit | Sita | Rakesh | Poonam
@@ -67,28 +67,28 @@ def step(title):
     print("\n" + "=" * 60 + f"\n{title}\n" + "=" * 60, flush=True)
 
 
-def music_level(setting, vocals_wav, bg_wav, voice_lufs=-16.0):
-    """Volume factor for the background music.
-    'auto': keep the original video's balance - if the music was 12 dB quieter
-    than the speech in the original, it is 12 dB quieter than the Assamese voice."""
+def mix_levels(setting, vocals_wav, bg_wav):
+    """Match the ORIGINAL video's sound:
+    - the Assamese voice gets the same loudness as the original speaker
+    - the original music keeps its original level (factor 1.0), no ducking
+    so the voice/music balance and overall loudness stay as in the original.
+    --music-volume NUMBER multiplies the music (0.5 = half, 1.5 = louder).
+    Returns (voice_lufs, music_gain)."""
     try:
-        return float(setting)
+        gain = float(setting)
     except (TypeError, ValueError):
-        pass
+        gain = 1.0
+    voice_lufs = -16.0
     try:
         import pyloudnorm as pyln
         import soundfile as sf
         v, sr = sf.read(str(vocals_wav), dtype="float32")
-        b, _ = sf.read(str(bg_wav), dtype="float32")
-        meter = pyln.Meter(sr)
-        lv, lb = meter.integrated_loudness(v), meter.integrated_loudness(b)
-        if lv == float("-inf") or lb == float("-inf"):
-            return 0.35
-        target = voice_lufs + (lb - lv)          # same music-to-voice gap as the original
-        return max(0.05, min(2.0, 10 ** ((target - lb) / 20)))
+        lv = pyln.Meter(sr).integrated_loudness(v)
+        if lv != float("-inf"):
+            voice_lufs = max(-20.0, min(-11.0, lv))
     except Exception as e:
-        print(f"  (could not measure the original balance: {e}; using 0.35)", flush=True)
-        return 0.35
+        print(f"  (could not measure the original speech: {e}; voice at -16 LUFS)", flush=True)
+    return voice_lufs, gain
 
 
 def srt_time(t):
@@ -114,7 +114,7 @@ def main():
     ap.add_argument("--speaker-voices", default="")
     ap.add_argument("--num-speakers", type=int, default=None)
     ap.add_argument("--sync", choices=["natural", "strict", "flow"], default="natural")
-    ap.add_argument("--music-volume", default="auto")
+    ap.add_argument("--music-volume", type=float, default=1.0)
     a = ap.parse_args()
     default_voice = {"male": "Amit", "female": "Sita"}.get(a.voice.lower(), a.voice.capitalize())
     if default_voice not in ("Amit", "Sita", "Rakesh", "Poonam"):
@@ -311,21 +311,22 @@ def main():
     out = P / f"{name}_assamese.mp4"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", video]
     if bg.exists() and not a.no_music:
-        # Voice levelled to a standard loudness (-16 LUFS). Music is set so the
-        # voice/music balance matches the ORIGINAL video, and dips a little
-        # (gentle ducking) while the Assamese voice speaks.
-        music_gain = music_level(a.music_volume, vocals, bg)
-        print(f"  music level: {music_gain:.2f}x", flush=True)
+        # Same sound as the original: voice as loud as the original speaker,
+        # original music at its original level, no ducking.
+        voice_lufs, music_gain = mix_levels(a.music_volume, vocals, bg)
+        print(f"  voice {voice_lufs:.1f} LUFS (as the original speaker), music x{music_gain:.2f}",
+              flush=True)
         cmd += ["-i", bg, "-i", voice_wav, "-i", sub_as, "-i", sub_src, "-filter_complex",
-                "[2:a]aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,"
-                "asplit=2[v][key];"
+                f"[2:a]aformat=channel_layouts=stereo,loudnorm=I={voice_lufs:.1f}:TP=-1.5:LRA=11,"
+                "aresample=44100[v];"
                 f"[1:a]volume={music_gain:.4f}[b];"
-                "[b][key]sidechaincompress=threshold=0.03:ratio=2.5:attack=30:release=500[bd];"
-                "[bd][v]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]",
+                "[b][v]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.97[a]",
                 "-map", "0:v:0", "-map", "[a]", "-map", "3:0", "-map", "4:0"]
     else:
+        voice_lufs, _ = mix_levels(1.0, vocals, bg)
         cmd += ["-i", voice_wav, "-i", sub_as, "-i", sub_src, "-filter_complex",
-                "[1:a]aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100[a]",
+                f"[1:a]aformat=channel_layouts=stereo,loudnorm=I={voice_lufs:.1f}:TP=-1.5:LRA=11,"
+                "aresample=44100[a]",
                 "-map", "0:v:0", "-map", "[a]", "-map", "2:0", "-map", "3:0"]
     cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text",
             "-metadata:s:a:0", "language=asm",

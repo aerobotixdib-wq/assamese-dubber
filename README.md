@@ -33,7 +33,7 @@ people's videos - commercial or not. This tool is for education.
 | 6 | Sarvam-Translate (via Ollama) | Translates each sentence into Assamese |
 | 7 | Indic Parler-TTS | Speaks it in Assamese (voices: Amit, Rakesh, Sita, Poonam) |
 | 8 | Llama 3.2 3B (via Ollama) | If a line is too long for its time, shortens the sentence and tries again |
-| 9 | FFmpeg | Puts the Assamese voice back over the **original music**, adds subtitles |
+| 9 | FFmpeg | Puts the Assamese voice back over the **original music**, at the same balance and loudness as the original video, and adds subtitles |
 
 You get:
 - `projects\NAME\NAME_assamese.mp4` - the dubbed video (with Assamese + original subtitle tracks)
@@ -101,6 +101,7 @@ Software (setup tells you the exact install command if one is missing):
 | `--num-speakers 2` | Tell the speaker detector how many people talk |
 | `--sync natural / strict / flow` | Timing rule (see below). Default: **natural** |
 | `--no-music` | Do not keep the original background music |
+| `--music-volume 1.0` | Music level. Default 1.0 = same as the original video (the Assamese voice is matched to the original speaker's loudness). 0.5 = half, 1.5 = louder |
 | `--whisper small` | Smaller, faster speech model (less accurate) |
 | `--max-speed 1.2` | How much a line may be sped up before it is re-written shorter |
 
