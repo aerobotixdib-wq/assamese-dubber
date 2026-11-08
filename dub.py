@@ -10,6 +10,8 @@ Options:
   --from en|hi|auto   source language (default: auto-detect)
   --name NAME         project folder name (default: from the video)
   --no-music          do not keep the original background music
+  --music-volume 0.35 background music level (0.2 = quieter, 0.6 = louder); it also dips
+                      automatically while the Assamese voice speaks
   --whisper MODEL     Whisper model (default large-v3-turbo; "small" is faster)
   --max-speed 1.2     how much a line may be sped up before it is re-written
   --voice male        one voice for everyone: male (Amit) | female (Sita) | Amit | Sita | Rakesh | Poonam
@@ -88,6 +90,7 @@ def main():
     ap.add_argument("--speaker-voices", default="")
     ap.add_argument("--num-speakers", type=int, default=None)
     ap.add_argument("--sync", choices=["natural", "strict", "flow"], default="natural")
+    ap.add_argument("--music-volume", type=float, default=0.35)
     a = ap.parse_args()
     default_voice = {"male": "Amit", "female": "Sita"}.get(a.voice.lower(), a.voice.capitalize())
     if default_voice not in ("Amit", "Sita", "Rakesh", "Poonam"):
@@ -277,13 +280,19 @@ def main():
     out = P / f"{name}_assamese.mp4"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", video]
     if bg.exists() and not a.no_music:
+        # Voice levelled to a standard loudness; music lowered and "ducked"
+        # (pushed down further) whenever the Assamese voice is speaking.
         cmd += ["-i", bg, "-i", voice_wav, "-i", sub_as, "-i", sub_src, "-filter_complex",
-                "[1:a]volume=0.8[b];[2:a]aformat=channel_layouts=stereo[v];"
-                "[b][v]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]",
+                "[2:a]aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100,"
+                "asplit=2[v][key];"
+                f"[1:a]volume={a.music_volume}[b];"
+                "[b][key]sidechaincompress=threshold=0.02:ratio=8:attack=20:release=400[bd];"
+                "[bd][v]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]",
                 "-map", "0:v:0", "-map", "[a]", "-map", "3:0", "-map", "4:0"]
     else:
-        cmd += ["-i", voice_wav, "-i", sub_as, "-i", sub_src,
-                "-map", "0:v:0", "-map", "1:a:0", "-map", "2:0", "-map", "3:0"]
+        cmd += ["-i", voice_wav, "-i", sub_as, "-i", sub_src, "-filter_complex",
+                "[1:a]aformat=channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=44100[a]",
+                "-map", "0:v:0", "-map", "[a]", "-map", "2:0", "-map", "3:0"]
     cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-c:s", "mov_text",
             "-metadata:s:a:0", "language=asm",
             "-metadata:s:s:0", "language=asm", "-metadata:s:s:0", "title=Assamese",
